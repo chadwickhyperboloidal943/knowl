@@ -59,6 +59,16 @@ export const getUserBooks = async (userId: string) => {
     }
 }
 
+export const getUserPublicNodes = async (userId: string) => {
+    try {
+        await connectToDatabase();
+        const books = await Book.find({ clerkId: userId, visibility: 'public' }).sort({ createdAt: -1 }).lean();
+        return { success: true, data: serializeData(books) };
+    } catch (e) {
+        return { success: false, error: e };
+    }
+}
+
 export const checkBookExists = async (title: string) => {
     try {
         await connectToDatabase();
@@ -178,7 +188,7 @@ export const saveBookSegments = async (bookId: string, clerkId: string, segments
 
         await BookSegment.insertMany(segmentsToInsert);
 
-        await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
+        await Book.updateOne({ _id: bookId }, { totalSegments: segments.length });
 
         console.log('Book segments saved successfully.');
 

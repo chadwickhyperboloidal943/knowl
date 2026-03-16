@@ -88,7 +88,7 @@ export const addComment = async (bookId: string, text: string) => {
             text
         });
 
-        await Book.findByIdAndUpdate(bookId, { $inc: { commentsCount: 1 } });
+        await Book.updateOne({ _id: bookId }, { $inc: { commentsCount: 1 } });
 
         revalidatePath(`/nodes/[slug]`, 'page');
 
@@ -157,7 +157,7 @@ export const deleteComment = async (commentId: string) => {
         }
 
         await Comment.findByIdAndDelete(commentId);
-        await Book.findByIdAndUpdate(comment.bookId, { $inc: { commentsCount: -1 } });
+        await Book.updateOne({ _id: comment.bookId }, { $inc: { commentsCount: -1 } });
 
         return { success: true };
     } catch (error) {

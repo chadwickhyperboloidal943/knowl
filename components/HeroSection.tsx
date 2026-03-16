@@ -53,7 +53,7 @@ const HeroSection = () => {
                                 <div className="w-10 h-10 min-w-10 min-h-10 rounded-full border border-gray-300 flex items-center justify-center font-medium text-lg">1</div>
                                 <div className="flex flex-col">
                                     <h3 className="library-step-title text-lg font-bold">Upload PDF</h3>
-                                    <p className="library-step-description text-gray-500">Add your book file</p>
+                                    <p className="library-step-description text-gray-500">Upload your node</p>
                                 </div>
                             </li>
                             <li className="library-step-item">

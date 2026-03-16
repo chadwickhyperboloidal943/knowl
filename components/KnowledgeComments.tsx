@@ -35,7 +35,7 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
         setIsLoading(true);
         getCommentsForBook(bookId)
             .then((res) => {
-                if (res.success) setComments(res.data || []);
+                if (res.success) setComments((res.data || []) as IComment[]);
             })
             .catch(() => {/* silently fail */})
             .finally(() => setIsLoading(false));
@@ -87,7 +87,9 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
             if (!res.success) {
                 toast.error("Failed to toggle pin.");
                 // refresh to correct state
-                getCommentsForBook(bookId).then(r => r.success && setComments(r.data));
+                getCommentsForBook(bookId).then(r => {
+                    if (r.success) setComments((r.data || []) as IComment[]);
+                });
             } else {
                 toast.success(res.isPinned ? "Insight pinned to top!" : "Insight unpinned.");
             }
@@ -125,6 +127,38 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
             }
         } catch {
             toast.error("Edit error.");
+        }
+    };
+    const handleLikeComment = async (commentId: string) => {
+        if (!user) return toast.error("Sign in to like insights!");
+
+        // Optimistic UI update
+        setComments(prev => prev.map(c => {
+            if (c._id === commentId) {
+                const hasLiked = c.likes?.includes(user.id);
+                const newLikes = hasLiked
+                    ? c.likes?.filter(id => id !== user.id)
+                    : [...(c.likes || []), user.id];
+                return { ...c, likes: newLikes };
+            }
+            return c;
+        }));
+
+        try {
+            const res = await likeComment(commentId);
+            if (!res.success) {
+                toast.error("Failed to update like status.");
+                // Refresh to sync state if failed
+                getCommentsForBook(bookId).then(r => {
+                    if (r.success) setComments((r.data || []) as IComment[]);
+                });
+            }
+        } catch {
+            toast.error("An error occurred while liking.");
+            // Refresh to sync state if failed
+            getCommentsForBook(bookId).then(r => {
+                if (r.success) setComments((r.data || []) as IComment[]);
+            });
         }
     };
 
@@ -191,7 +225,7 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                 ) : (
                     comments.map((rawComment) => {
                         const comment = normalizeComment(rawComment);
-                        const isLiked = user ? comment.likes.includes(user.id) : false;
+                        const isLiked = user ? (comment.likes || []).includes(user.id) : false;
                         const isBookAuthor = comment.clerkId === bookOwnerId;
                         const isOwnComment = user?.id === comment.clerkId;
                         const canModerate = user?.id === bookOwnerId;
@@ -320,7 +354,7 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                                             )}
                                         >
                                             <Heart size={11} className={isLiked ? "fill-red-500" : ""} />
-                                            <span>{comment.likes?.length || 0 > 0 ? comment.likes?.length : ''}</span>
+                                            <span>{(comment.likes || []).length > 0 ? comment.likes?.length : ''}</span>
                                         </button>
                                     </div>
                                 </div>

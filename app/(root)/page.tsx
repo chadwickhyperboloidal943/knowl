@@ -17,7 +17,7 @@ const Page = async ({ searchParams }: { searchParams: Promise<{ query?: string }
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 mb-10">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-serif font-bold text-[#212a3b] dark:text-white">Knowledge Hub</h2>
+                    <h2 className="text-3xl font-serif font-bold text-[#212a3b] dark:text-white">Discovery Hub</h2>
                     <p className="text-gray-500 dark:text-gray-400">Discover insights shared by the community</p>
                 </div>
                 <Search />

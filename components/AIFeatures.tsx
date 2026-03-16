@@ -14,9 +14,12 @@ import {cn} from "@/lib/utils";
 import ReactMarkdown from 'react-markdown';
 import { toast } from "sonner";
 import KnowledgeComments from "./KnowledgeComments";
+import FollowButton from "./FollowButton";
+import Link from "next/link";
+import { getFollowInfo } from "@/lib/actions/user.actions";
 
 export default function AIFeatures({ book }: { book: IBook }) {
-    const { user } = useUser();
+    const { user, isLoaded } = useUser();
     const isOwner = user?.id === book.clerkId;
     
     const [activeTab, setActiveTab] = useState<"chat" | "about" | "flashcards" | "community">("chat");
@@ -27,6 +30,17 @@ export default function AIFeatures({ book }: { book: IBook }) {
     const [visibility, setVisibility] = useState<'private' | 'public'>(book.visibility || 'private');
     const [likes, setLikes] = useState(book.likes || []);
     const isLiked = user?.id ? likes.includes(user.id) : false;
+    
+    // Social state
+    const [isFollowing, setIsFollowing] = useState(false);
+
+    useEffect(() => {
+        if (visibility === 'public' && user?.id && !isOwner) {
+            getFollowInfo(book.clerkId, user.id).then(res => {
+                if (res.success) setIsFollowing(res.isFollowing || false);
+            });
+        }
+    }, [book.clerkId, user?.id, visibility, isOwner]);
 
     // Hashtag Modal State
     const [showHashtagModal, setShowHashtagModal] = useState(false);
@@ -193,7 +207,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                     onClick={visibility === 'public' && hashtags.length > 0 && book.hashtags?.length ? handleUpdateTags : handleTogglePrivacy}
                                     className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 transition-all transform active:scale-95"
                                 >
-                                    {visibility === 'public' && book.hashtags?.length ? "Update Hashtags" : "Publish Knowledge Resource"}
+                                    {visibility === 'public' && book.hashtags?.length ? "Update Hashtags" : "Publish Node to Hub"}
                                 </button>
                                 
                                 <button 
@@ -211,22 +225,51 @@ export default function AIFeatures({ book }: { book: IBook }) {
             {/* Social Action Bar - Only for Public resources */}
             {visibility === 'public' && (
                 <div className="flex flex-wrap items-center justify-between gap-6 px-10 py-6 bg-white/10 dark:bg-black/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/20 dark:border-white/5 shadow-2xl">
-                    <div className="flex items-center gap-6">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Knowledge Type</span>
-                            <div className="flex items-center gap-2 mt-1">
-                                <Globe size={16} className="text-emerald-400" />
-                                <span className="font-serif font-black text-xl italic dark:text-white capitalize">{visibility}</span>
+                    <div className="flex flex-wrap items-center gap-10">
+                        {/* Author Info */}
+                        <div className="flex items-center gap-4 group">
+                            <Link href={`/users/${book.clerkId}`} className="relative">
+                                <div className="absolute -inset-1 bg-indigo-500 rounded-full blur opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                                <div className="size-12 bg-indigo-600 rounded-full flex items-center justify-center text-white font-black text-xs border-2 border-white dark:border-[#141414] shadow-lg group-hover:scale-110 transition-transform">
+                                    {book.author.charAt(0)}
+                                </div>
+                            </Link>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Curated By</span>
+                                <Link href={`/users/${book.clerkId}`} className="font-serif font-black text-xl italic dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                                    {book.author}
+                                </Link>
                             </div>
+                            {!isOwner && user?.id && (
+                                <div className="ml-2">
+                                    <FollowButton 
+                                        followerClerkId={user.id} 
+                                        followedClerkId={book.clerkId} 
+                                        initialIsFollowing={isFollowing} 
+                                    />
+                                </div>
+                            )}
                         </div>
-                        {isOwner && (
-                            <button 
-                                onClick={handleTogglePrivacy}
-                                className="px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500 hover:text-white"
-                            >
-                                Make Private
-                            </button>
-                        )}
+
+                        <div className="h-10 w-[1px] bg-black/5 dark:bg-white/10 hidden md:block" />
+
+                        <div className="flex items-center gap-6">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Node Type</span>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Globe size={16} className="text-emerald-400" />
+                                    <span className="font-serif font-black text-xl italic dark:text-white capitalize">{visibility}</span>
+                                </div>
+                            </div>
+                            {isOwner && (
+                                <button 
+                                    onClick={handleTogglePrivacy}
+                                    className="px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500 hover:text-white"
+                                >
+                                    Make Private
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -430,7 +473,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                         <BookOpen size={28} />
                                     </div>
                                     <div>
-                                        <h2 className="text-5xl font-serif font-black text-[#212a3b] dark:text-white tracking-tighter leading-tight italic">Resource <span className="text-indigo-600">Brief</span></h2>
+                                        <h2 className="text-5xl font-serif font-black text-[#212a3b] dark:text-white tracking-tighter leading-tight italic">Node <span className="text-indigo-600">Insight</span></h2>
                                         <div className="h-1 w-20 bg-indigo-600 mt-2 rounded-full" />
                                     </div>
                                 </div>

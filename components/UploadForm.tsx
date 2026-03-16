@@ -75,7 +75,7 @@ const UploadForm = () => {
 
     const onSubmit = async (data: BookUploadFormValues) => {
         if(!userId) {
-           return toast.error("Please login to upload books");
+           return toast.error("Please login to upload nodes");
         }
 
         setIsSubmitting(true);
@@ -86,7 +86,7 @@ const UploadForm = () => {
             const existsCheck = await checkBookExists(data.title);
 
             if(existsCheck.exists && existsCheck.book) {
-                toast.info("Book with same title already exists.");
+                toast.info("Node with same title already exists.");
                 form.reset()
                 router.push(`/nodes/${existsCheck.book.slug}`)
                 return;
@@ -113,7 +113,7 @@ const UploadForm = () => {
                 
                 // Show loading toast for AI extraction
                 const extractionToast = toast.loading("Synthesizing node signatures with AI...");
-                const { extractContentFromFile } = await import("@/lib/actions/ai.actions");
+                const { extractContentFromFile, generateNodeCover } = await import("@/lib/actions/ai.actions");
                 const extracted = await extractContentFromFile(uploadedBlob.url, file.name, file.type);
                 
                 toast.dismiss(extractionToast);
@@ -125,7 +125,7 @@ const UploadForm = () => {
 
                 parsedFile = {
                     content: extracted.data.content,
-                    cover: '/file-icon.png', // Fallback for now
+                    cover: await generateNodeCover(extracted.data.visualTheme || 'minimal'),
                     title: extracted.data.title
                 };
             }
@@ -155,9 +155,12 @@ const UploadForm = () => {
 
                 const uploadedCoverBlob = await uploadViaApi(blob, `${fileTitle}_cover.png`, 'image/png', 'public');
                 coverUrl = uploadedCoverBlob.url;
+            } else if (parsedFile.cover && parsedFile.cover.startsWith('http')) {
+                // If it's a URL (like from Unsplash), use it directly
+                coverUrl = parsedFile.cover;
             } else {
-                 // Default cover for non-PDFs or when extraction fails
-                 coverUrl = 'https://utfs.io/f/5e0e64c1-4b1e-4b0b-8d6d-2e1f488f5f3e-1z.png'; // A nice default gradient/placeholder
+                 // Final fallback
+                 coverUrl = 'https://utfs.io/f/5e0e64c1-4b1e-4b0b-8d6d-2e1f488f5f3e-1z.png'; 
             }
 
             const book = await createBook({
@@ -172,7 +175,7 @@ const UploadForm = () => {
             });
 
             if(!book.success) {
-                toast.error(book.error as string || "Failed to create book");
+                toast.error(book.error as string || "Failed to create node");
                 if (book.isBillingError) {
                     router.push("/subscriptions");
                 }
@@ -180,7 +183,7 @@ const UploadForm = () => {
             }
 
             if(book.alreadyExists) {
-                toast.info("Book with same title already exists.");
+                toast.info("Node with same title already exists.");
                 form.reset()
                 router.push(`/nodes/${book.data.slug}`)
                 return;
@@ -189,7 +192,7 @@ const UploadForm = () => {
             const segments = await saveBookSegments(book.data._id, userId, parsedFile.content);
 
             if(!segments.success) {
-                toast.error("Failed to save book segments");
+                toast.error("Failed to save node segments");
                 throw new Error("Failed to save book segments");
             }
 
@@ -198,7 +201,7 @@ const UploadForm = () => {
         } catch (error) {
             console.error(error);
 
-            const message = error instanceof Error ? error.message : 'Failed to upload book. Please try again later.';
+            const message = error instanceof Error ? error.message : 'Failed to upload node. Please try again later.';
             toast.error(message);
         } finally {
             setIsSubmitting(false);

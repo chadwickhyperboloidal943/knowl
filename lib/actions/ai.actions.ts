@@ -82,7 +82,7 @@ export const generateBookInsights = async (bookId: string) => {
             return { success: false, error: "AI provided incomplete data. We will work on this." };
         }
 
-        await Book.findByIdAndUpdate(bookId, {
+        await Book.updateOne({ _id: bookId }, {
             insights: parsed.insights,
             knowledgeMap: parsed.knowledgeMap,
             flashcards: parsed.flashcards
@@ -120,6 +120,7 @@ export const extractContentFromFile = async (fileUrl: string, fileName: string, 
         1. "content": The extracted text content.
         2. "suggestedTitle": A clean title for this document.
         3. "summary": A brief (100-200 chars) summary/gist of the content for a preview.
+        4. "visualTheme": Choose one keyword that best represents the visual "mood" of the content: 'minimal', 'vibrant', 'dark', 'tech', 'nature', 'industrial', 'academic', or 'artistic'.
         
         Strict JSON format only.
         `;
@@ -149,7 +150,8 @@ export const extractContentFromFile = async (fileUrl: string, fileName: string, 
             data: {
                 content: segments,
                 title: parsed.suggestedTitle || fileName.replace(/\.[^/.]+$/, ""),
-                summary: parsed.summary
+                summary: parsed.summary,
+                visualTheme: parsed.visualTheme || 'minimal'
             }
         };
 
@@ -158,3 +160,18 @@ export const extractContentFromFile = async (fileUrl: string, fileName: string, 
         return { success: false, error: "Failed to process file with AI" };
     }
 }
+
+export const generateNodeCover = async (theme: string) => {
+    const themes: Record<string, string> = {
+        minimal: 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?q=80&w=1000&auto=format&fit=crop', // Minimal lamp
+        vibrant: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop', // Abstract colorful
+        dark: 'https://images.unsplash.com/photo-1514332042231-897db4652c42?q=80&w=1000&auto=format&fit=crop', // Dark textured
+        tech: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1000&auto=format&fit=crop', // Circuit/Tech
+        nature: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1000&auto=format&fit=crop', // Forest
+        industrial: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop', // Concrete Architecture
+        academic: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1000&auto=format&fit=crop', // Library books
+        artistic: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=1000&auto=format&fit=crop', // Abstract paint
+    };
+
+    return themes[theme] || themes.minimal;
+};

@@ -35,7 +35,7 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
         setIsLoading(true);
         getCommentsForBook(bookId)
             .then((res) => {
-                if (res.success) setComments(res.data || []);
+                if (res.success) setComments((res.data || []) as IComment[]);
             })
             .catch(() => {/* silently fail */})
             .finally(() => setIsLoading(false));
@@ -87,7 +87,9 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
             if (!res.success) {
                 toast.error("Failed to toggle pin.");
                 // refresh to correct state
-                getCommentsForBook(bookId).then(r => r.success && setComments(r.data));
+                getCommentsForBook(bookId).then(r => {
+                    if (r.success) setComments((r.data || []) as IComment[]);
+                });
             } else {
                 toast.success(res.isPinned ? "Insight pinned to top!" : "Insight unpinned.");
             }
@@ -127,28 +129,55 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
             toast.error("Edit error.");
         }
     };
+    const handleLikeComment = async (commentId: string) => {
+        if (!user) return toast.error("Sign in to like insights!");
+
+        // Optimistic UI update
+        setComments(prev => prev.map(c => {
+            if (c._id === commentId) {
+                const hasLiked = c.likes?.includes(user.id);
+                const newLikes = hasLiked
+                    ? c.likes?.filter(id => id !== user.id)
+                    : [...(c.likes || []), user.id];
+                return { ...c, likes: newLikes };
+            }
+            return c;
+        }));
+
+        try {
+            const res = await likeComment(commentId);
+            if (!res.success) {
+                toast.error("Failed to update like status.");
+                // Refresh to sync state if failed
+                getCommentsForBook(bookId).then(r => {
+                    if (r.success) setComments((r.data || []) as IComment[]);
+                });
+            }
+        } catch {
+            toast.error("An error occurred while liking.");
+            // Refresh to sync state if failed
+            getCommentsForBook(bookId).then(r => {
+                if (r.success) setComments((r.data || []) as IComment[]);
+            });
+        }
+    };
 
     return (
         <div className="flex flex-col h-full min-h-[600px]">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-xl bg-indigo-600/10 flex items-center justify-center">
-                        <MessageSquare size={16} className="text-indigo-500" />
-                    </div>
-                    <div>
-                        <h3 className="text-sm font-black dark:text-white">Community Insights</h3>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{comments.length} shared</p>
-                    </div>
+                    <MessageSquare className="text-indigo-600 dark:text-indigo-400" size={18} />
+                    <h3 className="text-xl font-serif font-bold text-gray-900 dark:text-gray-100 italic">Discussion</h3>
                 </div>
             </div>
 
             {/* Comment Input */}
             <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
                 {user?.imageUrl ? (
-                    <img src={user.imageUrl} alt="" className="size-10 rounded-xl shrink-0 object-cover" />
+                    <img src={user.imageUrl} alt="" className="size-10 rounded-full shrink-0 object-cover" />
                 ) : (
-                    <div className="size-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
+                    <div className="size-10 rounded-full bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
                         <User size={18} className="text-indigo-500" />
                     </div>
                 )}
@@ -196,7 +225,7 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                 ) : (
                     comments.map((rawComment) => {
                         const comment = normalizeComment(rawComment);
-                        const isLiked = user ? comment.likes.includes(user.id) : false;
+                        const isLiked = user ? (comment.likes || []).includes(user.id) : false;
                         const isBookAuthor = comment.clerkId === bookOwnerId;
                         const isOwnComment = user?.id === comment.clerkId;
                         const canModerate = user?.id === bookOwnerId;
@@ -216,29 +245,25 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                                     <img
                                         src={comment.userImage}
                                         alt={comment.userName}
-                                        className="size-10 rounded-xl object-cover shrink-0 border border-black/5 dark:border-white/5"
+                                        className="size-10 rounded-full object-cover shrink-0 border border-black/5 dark:border-white/5"
                                     />
                                 ) : (
-                                    <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
+                                    <div className="size-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
                                         <User size={16} className="text-indigo-400" />
                                     </div>
                                 )}
 
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-1.5">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-xs font-black dark:text-white">{comment.userName}</span>
-                                            {isBookAuthor && (
-                                                <span className="px-2 py-0.5 bg-indigo-600 text-white text-[8px] font-black uppercase tracking-widest rounded-md">Author</span>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold text-sm text-gray-900 dark:text-gray-200">{comment.userName}</span>
+                                            {comment.clerkId === bookOwnerId && (
+                                                <span className="px-2 py-0.5 bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 text-[9px] font-black uppercase tracking-widest rounded-full border border-indigo-500/20">
+                                                    Author
+                                                </span>
                                             )}
-                                            <span className="text-[10px] text-gray-400 font-medium">
-                                                {(() => {
-                                                    try {
-                                                        return formatDistanceToNow(new Date(comment.createdAt)) + ' ago';
-                                                    } catch {
-                                                        return 'just now';
-                                                    }
-                                                })()}
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium tracking-tight">
+                                                {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                                             </span>
                                         </div>
 
@@ -294,7 +319,8 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                                             <textarea
                                                 value={editText}
                                                 onChange={(e) => setEditText(e.target.value)}
-                                                className="w-full bg-gray-50 dark:bg-white/5 border border-indigo-500/30 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-white"
+                                                placeholder="Add a thought to this node..."
+                                                className="flex-1 bg-white/50 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-900 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 min-h-[50px] resize-none"
                                                 rows={2}
                                             />
                                             <div className="flex gap-2 justify-end">
@@ -328,7 +354,7 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                                             )}
                                         >
                                             <Heart size={11} className={isLiked ? "fill-red-500" : ""} />
-                                            <span>{comment.likes?.length || 0 > 0 ? comment.likes?.length : ''}</span>
+                                            <span>{(comment.likes || []).length > 0 ? comment.likes?.length : ''}</span>
                                         </button>
                                     </div>
                                 </div>

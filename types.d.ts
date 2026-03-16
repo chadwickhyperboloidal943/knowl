@@ -69,6 +69,19 @@ export interface IVoiceSession extends Document {
     createdAt: Date;
     updatedAt: Date;
 }
+export interface IUser extends Document {
+    clerkId: string;
+    username?: string;
+    email: string;
+    imageUrl?: string;
+    firstName?: string;
+    lastName?: string;
+    followers: string[]; // Clerk IDs
+    following: string[]; // Clerk IDs
+    bio?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
 
 // ============================================
 // FORM & INPUT TYPES

@@ -35,7 +35,7 @@ export const chatWithBook = async (bookId: string, userMessage: string, sessionI
         const bookContext = segments.map((s: any) => s.content).join('\n\n').slice(0, 12000);
 
         // Use the same model that works in ai.actions.ts
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `You are a knowledgeable AI assistant that specializes in discussing the book "${book.title}" by ${book.author}. You have deep knowledge of this book's content, themes, characters, and ideas.
 

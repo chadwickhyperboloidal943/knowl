@@ -58,8 +58,8 @@ const ShelfPage = async ({ searchParams }: { searchParams: Promise<{ query?: str
                     <div className="size-20 bg-gray-100 dark:bg-white/5 rounded-full flex items-center justify-center">
                         <span className="text-4xl text-gray-300">📚</span>
                     </div>
-                    <h3 className="text-xl font-bold dark:text-white">No knowledge resources yet</h3>
-                    <p className="text-gray-500 max-w-xs">Upload your first book or PDF to start your AI-powered research journey.</p>
+                    <h3 className="text-xl font-bold dark:text-white">No nodes yet</h3>
+                    <p className="text-gray-500 max-w-xs">Upload your first node or PDF to start your AI-powered research journey.</p>
                 </div>
             )}
         </main>

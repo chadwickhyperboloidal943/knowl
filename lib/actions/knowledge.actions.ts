@@ -28,7 +28,7 @@ export const toggleBookPrivacy = async (bookId: string, hashtags?: string[]) => 
         }
         await book.save();
 
-        revalidatePath(`/books/${book.slug}`);
+        revalidatePath(`/nodes/${book.slug}`);
         revalidatePath('/');
         revalidatePath('/shelf');
 
@@ -61,7 +61,7 @@ export const likeBook = async (bookId: string) => {
         await book.save();
 
         revalidatePath('/');
-        revalidatePath(`/books/${book.slug}`);
+        revalidatePath(`/nodes/${book.slug}`);
 
         return { success: true, likes: serializeData(likes) };
     } catch (e: any) {
@@ -88,9 +88,9 @@ export const addComment = async (bookId: string, text: string) => {
             text
         });
 
-        await Book.findByIdAndUpdate(bookId, { $inc: { commentsCount: 1 } });
+        await Book.updateOne({ _id: bookId }, { $inc: { commentsCount: 1 } });
 
-        revalidatePath(`/books/[slug]`, 'page');
+        revalidatePath(`/nodes/[slug]`, 'page');
 
         return { success: true, data: serializeData(comment) };
     } catch (e: any) {
@@ -157,7 +157,7 @@ export const deleteComment = async (commentId: string) => {
         }
 
         await Comment.findByIdAndDelete(commentId);
-        await Book.findByIdAndUpdate(comment.bookId, { $inc: { commentsCount: -1 } });
+        await Book.updateOne({ _id: comment.bookId }, { $inc: { commentsCount: -1 } });
 
         return { success: true };
     } catch (error) {

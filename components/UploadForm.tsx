@@ -10,7 +10,7 @@ import { BookUploadFormValues } from '@/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES } from '@/lib/constants';
+import { ACCEPTED_FILE_TYPES, ACCEPTED_IMAGE_TYPES } from '@/lib/constants';
 import FileUploader from './FileUploader';
 import LoadingOverlay from './LoadingOverlay';
 import {useAuth, useUser} from "@clerk/nextjs";
@@ -75,7 +75,7 @@ const UploadForm = () => {
 
     const onSubmit = async (data: BookUploadFormValues) => {
         if(!userId) {
-           return toast.error("Please login to upload books");
+           return toast.error("Please login to upload nodes");
         }
 
         setIsSubmitting(true);
@@ -86,34 +86,62 @@ const UploadForm = () => {
             const existsCheck = await checkBookExists(data.title);
 
             if(existsCheck.exists && existsCheck.book) {
-                toast.info("Book with same title already exists.");
+                toast.info("Node with same title already exists.");
                 form.reset()
-                router.push(`/books/${existsCheck.book.slug}`)
+                router.push(`/nodes/${existsCheck.book.slug}`)
                 return;
             }
 
-            const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
-            const pdfFile = data.pdfFile;
+            const fileTitle = data.title || data.pdfFile.name.replace(/\.[^/.]+$/, "");
+            const file = data.pdfFile;
+            let parsedFile: { content: any[], cover: string, title?: string };
 
-            const parsedPDF = await parsePDFFile(pdfFile);
+            if (file.type === 'application/pdf') {
+                const parsedPDF = await parsePDFFile(file);
+                if(parsedPDF.content.length === 0) {
+                    toast.error("Failed to parse PDF. Please try again with a different file.");
+                    return;
+                }
+                parsedFile = {
+                    content: parsedPDF.content,
+                    cover: parsedPDF.cover,
+                    title: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ")
+                };
+            } else {
+                // Upload first, then extract content
+                const uploadedBlob = await uploadViaApi(file, `${fileTitle}${file.name.substring(file.name.lastIndexOf('.'))}`, file.type, 'public');
+                
+                // Show loading toast for AI extraction
+                const extractionToast = toast.loading("Synthesizing node signatures with AI...");
+                const { extractContentFromFile, generateNodeCover } = await import("@/lib/actions/ai.actions");
+                const extracted = await extractContentFromFile(uploadedBlob.url, file.name, file.type);
+                
+                toast.dismiss(extractionToast);
 
-            if(parsedPDF.content.length === 0) {
-                toast.error("Failed to parse PDF. Please try again with a different file.");
-                return;
+                if (!extracted.success || !extracted.data) {
+                    toast.error(extracted.error as string || "Failed to extract content from file");
+                    return;
+                }
+
+                parsedFile = {
+                    content: extracted.data.content,
+                    cover: await generateNodeCover(extracted.data.visualTheme || 'minimal'),
+                    title: extracted.data.title
+                };
             }
 
             setPdfPreview({
-                title: pdfFile.name,
-                content: parsedPDF.content[0]?.substring(0, 300) + "...",
-                cover: parsedPDF.cover
+                title: parsedFile.title || file.name,
+                content: parsedFile.content[0]?.text.substring(0, 300) + "...",
+                cover: parsedFile.cover
             });
 
             // Auto-fill title if empty
             if (!form.getValues('title')) {
-                form.setValue('title', pdfFile.name.replace(/\.[^/.]+$/, "").replace(/_/g, " "));
+                form.setValue('title', parsedFile.title || file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " "));
             }
 
-            const uploadedPdfBlob = await uploadViaApi(pdfFile, `${fileTitle}.pdf`, 'application/pdf');
+            const uploadedPdfBlob = await uploadViaApi(file, `${fileTitle}${file.name.substring(file.name.lastIndexOf('.'))}`, file.type);
 
             let coverUrl: string;
 
@@ -121,27 +149,33 @@ const UploadForm = () => {
                 const coverFile = data.coverImage;
                 const uploadedCoverBlob = await uploadViaApi(coverFile, `${fileTitle}_cover.png`, coverFile.type, 'public');
                 coverUrl = uploadedCoverBlob.url;
-            } else {
-                const response = await fetch(parsedPDF.cover)
+            } else if (parsedFile.cover && parsedFile.cover.startsWith('data:')) {
+                const response = await fetch(parsedFile.cover)
                 const blob = await response.blob();
 
                 const uploadedCoverBlob = await uploadViaApi(blob, `${fileTitle}_cover.png`, 'image/png', 'public');
                 coverUrl = uploadedCoverBlob.url;
+            } else if (parsedFile.cover && parsedFile.cover.startsWith('http')) {
+                // If it's a URL (like from Unsplash), use it directly
+                coverUrl = parsedFile.cover;
+            } else {
+                 // Final fallback
+                 coverUrl = 'https://utfs.io/f/5e0e64c1-4b1e-4b0b-8d6d-2e1f488f5f3e-1z.png'; 
             }
 
             const book = await createBook({
                 clerkId: userId,
-                title: data.title,
+                title: form.getValues('title') || data.title,
                 author: user?.fullName || "Anonymous Researcher",
                 persona: "rachel", // Default to Rachel initially, user can change later in Hub
                 fileURL: uploadedPdfBlob.url,
                 fileBlobKey: uploadedPdfBlob.pathname,
                 coverURL: coverUrl,
-                fileSize: pdfFile.size,
+                fileSize: file.size,
             });
 
             if(!book.success) {
-                toast.error(book.error as string || "Failed to create book");
+                toast.error(book.error as string || "Failed to create node");
                 if (book.isBillingError) {
                     router.push("/subscriptions");
                 }
@@ -149,16 +183,16 @@ const UploadForm = () => {
             }
 
             if(book.alreadyExists) {
-                toast.info("Book with same title already exists.");
+                toast.info("Node with same title already exists.");
                 form.reset()
-                router.push(`/books/${book.data.slug}`)
+                router.push(`/nodes/${book.data.slug}`)
                 return;
             }
 
-            const segments = await saveBookSegments(book.data._id, userId, parsedPDF.content);
+            const segments = await saveBookSegments(book.data._id, userId, parsedFile.content);
 
             if(!segments.success) {
-                toast.error("Failed to save book segments");
+                toast.error("Failed to save node segments");
                 throw new Error("Failed to save book segments");
             }
 
@@ -167,7 +201,7 @@ const UploadForm = () => {
         } catch (error) {
             console.error(error);
 
-            const message = error instanceof Error ? error.message : 'Failed to upload book. Please try again later.';
+            const message = error instanceof Error ? error.message : 'Failed to upload node. Please try again later.';
             toast.error(message);
         } finally {
             setIsSubmitting(false);
@@ -189,11 +223,11 @@ const UploadForm = () => {
                                 <FileUploader
                                     control={form.control}
                                     name="pdfFile"
-                                    label="Library Asset (PDF)"
-                                    acceptTypes={ACCEPTED_PDF_TYPES}
+                                    label="Library Asset"
+                                    acceptTypes={ACCEPTED_FILE_TYPES}
                                     icon={Upload}
-                                    placeholder="Drop your PDF here"
-                                    hint="Maximum size: 50MB"
+                                    placeholder="Drop your file here"
+                                    hint="PDF, DOCX, PPTX, Images, Text (Max 500MB)"
                                     disabled={isSubmitting}
                                 />
                             </div>
@@ -203,7 +237,7 @@ const UploadForm = () => {
                                 <FileUploader
                                     control={form.control}
                                     name="coverImage"
-                                    label="Cover Display (Optional)"
+                                    label="Node Cover (Optional)"
                                     acceptTypes={ACCEPTED_IMAGE_TYPES}
                                     icon={ImageIcon}
                                     placeholder="Upload cover art"
@@ -218,7 +252,7 @@ const UploadForm = () => {
                                 <div className="size-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                                     <div className="size-2 bg-white rounded-full animate-pulse" />
                                 </div>
-                                Scribe Details
+                                Node Details
                             </h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <FormField
@@ -226,16 +260,16 @@ const UploadForm = () => {
                                     name="title"
                                     render={({ field }) => (
                                         <FormItem className="col-span-1">
-                                            <FormLabel className="text-sm font-bold text-gray-500 uppercase tracking-widest ml-1">Work Title</FormLabel>
+                                            <FormLabel className="text-sm font-bold text-gray-500 dark:text-gray-300 uppercase tracking-widest ml-1">Node Title</FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className="h-14 bg-gray-50 dark:bg-black/40 border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium text-lg"
+                                                    className="h-14 bg-gray-50 dark:bg-black/40 border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium text-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                                     placeholder="e.g. Beyond Good and Evil"
                                                     {...field}
                                                     disabled={isSubmitting}
                                                 />
                                             </FormControl>
-                                            <FormMessage />
+                                            <FormMessage className="dark:text-red-400" />
                                         </FormItem>
                                     )}
                                 />
@@ -275,15 +309,15 @@ const UploadForm = () => {
                                             <div className="space-y-2">
                                                 <div className="flex items-center gap-2">
                                                     <Sparkles size={12} className="text-indigo-500" />
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Source Pulse</p>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Neural Signature</p>
                                                 </div>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed italic border-l-2 border-indigo-500/20 pl-4">
+                                                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed italic border-l-2 border-indigo-500/20 pl-4">
                                                     "{pdfPreview.content}"
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-3">
-                                                {["OCR Verified", "Semantic Map", "Structure Linked"].map(tag => (
-                                                    <div key={tag} className="px-3 py-1 bg-white dark:bg-white/5 rounded-full border border-black/5 dark:border-white/5 text-[10px] font-bold text-gray-500 flex items-center gap-2">
+                                                {["AI Analyzed", "Semantic Map", "Structure Linked"].map(tag => (
+                                                    <div key={tag} className="px-3 py-1 bg-white dark:bg-white/5 rounded-full border border-black/5 dark:border-white/5 text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                                         <div className="size-1 bg-green-500 rounded-full" />
                                                         {tag}
                                                     </div>
@@ -303,7 +337,7 @@ const UploadForm = () => {
                                 className="group relative px-12 py-5 bg-indigo-600 text-white rounded-2xl font-black text-xl shadow-2xl shadow-indigo-500/40 hover:bg-indigo-700 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 overflow-hidden"
                             >
                                 <span className="relative z-10 flex items-center gap-3">
-                                    Synthesize Knowledge
+                                    Synthesize Node
                                     <div className="size-6 bg-white/20 rounded-full flex items-center justify-center group-hover:rotate-45 transition-transform">
                                         →
                                     </div>

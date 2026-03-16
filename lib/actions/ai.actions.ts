@@ -26,7 +26,7 @@ export const generateBookInsights = async (bookId: string) => {
             return { success: false, error: "No book content available to analyze" };
         }
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `
         Analyze the following text excerpts from the book "${book.title}" by ${book.author}.
@@ -82,7 +82,7 @@ export const generateBookInsights = async (bookId: string) => {
             return { success: false, error: "AI provided incomplete data. We will work on this." };
         }
 
-        await Book.findByIdAndUpdate(bookId, {
+        await Book.updateOne({ _id: bookId }, {
             insights: parsed.insights,
             knowledgeMap: parsed.knowledgeMap,
             flashcards: parsed.flashcards
@@ -103,3 +103,75 @@ export const generateBookInsights = async (bookId: string) => {
         };
     }
 }
+
+export const extractContentFromFile = async (fileUrl: string, fileName: string, fileType: string) => {
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+        // Fetch the file content
+        const response = await fetch(fileUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const base64Content = Buffer.from(arrayBuffer).toString('base64');
+
+        const prompt = `
+        You are an expert document analyzer. Extract the text content from this file: "${fileName}".
+        If it's an image, perform OCR. If it's a document (DOCX/PPTX), extract all readable text.
+        Format the output as a JSON object with:
+        1. "content": The extracted text content.
+        2. "suggestedTitle": A clean title for this document.
+        3. "summary": A brief (100-200 chars) summary/gist of the content for a preview.
+        4. "visualTheme": Choose one keyword that best represents the visual "mood" of the content: 'minimal', 'vibrant', 'dark', 'tech', 'nature', 'industrial', 'academic', or 'artistic'.
+        
+        Strict JSON format only.
+        `;
+
+        const result = await model.generateContent([
+            prompt,
+            {
+                inlineData: {
+                    data: base64Content,
+                    mimeType: fileType
+                }
+            }
+        ]);
+
+        const aiResponse = result.response.text();
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found in AI response");
+        
+        const parsed = JSON.parse(jsonMatch[0].trim());
+
+        // Split into segments
+        const { splitIntoSegments } = await import("@/lib/utils");
+        const segments = splitIntoSegments(parsed.content);
+
+        return {
+            success: true,
+            data: {
+                content: segments,
+                title: parsed.suggestedTitle || fileName.replace(/\.[^/.]+$/, ""),
+                summary: parsed.summary,
+                visualTheme: parsed.visualTheme || 'minimal'
+            }
+        };
+
+    } catch (error) {
+        console.error("Error extracting content from file:", error);
+        return { success: false, error: "Failed to process file with AI" };
+    }
+}
+
+export const generateNodeCover = async (theme: string) => {
+    const themes: Record<string, string> = {
+        minimal: 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?q=80&w=1000&auto=format&fit=crop', // Minimal lamp
+        vibrant: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop', // Abstract colorful
+        dark: 'https://images.unsplash.com/photo-1514332042231-897db4652c42?q=80&w=1000&auto=format&fit=crop', // Dark textured
+        tech: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1000&auto=format&fit=crop', // Circuit/Tech
+        nature: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1000&auto=format&fit=crop', // Forest
+        industrial: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop', // Concrete Architecture
+        academic: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1000&auto=format&fit=crop', // Library books
+        artistic: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=1000&auto=format&fit=crop', // Abstract paint
+    };
+
+    return themes[theme] || themes.minimal;
+};

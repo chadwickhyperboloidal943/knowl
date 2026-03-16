@@ -64,7 +64,7 @@ export const endVoiceSession = async (sessionId: string, durationSeconds: number
     try {
         await connectToDatabase();
 
-        const result = await VoiceSession.findByIdAndUpdate(sessionId, {
+        const result = await VoiceSession.updateOne({ _id: sessionId }, {
             endedAt: new Date(),
             durationSeconds,
         });

@@ -5,7 +5,7 @@ import Vapi from '@vapi-ai/web';
 import { useAuth } from '@clerk/nextjs';
 
 import { useSubscription } from '@/hooks/useSubscription';
-import { ASSISTANT_ID, DEFAULT_VOICE } from '@/lib/constants';
+import { ASSISTANT_ID, DEFAULT_VOICE, voiceOptions } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
 import { IBook, Messages } from '@/types';
 import { startVoiceSession, endVoiceSession } from '@/lib/actions/session.actions';
@@ -20,8 +20,8 @@ const TIMER_INTERVAL_MS = 1000;
 const SUPPRESSED_ERRORS = ['Meeting has ended', 'ejection', 'Meeting ended', 'daily-js'];
 if (typeof window !== 'undefined') {
   const _origError = console.error.bind(console);
-  (console as any).__vapi_patched = true;
   if (!(console as any).__vapi_patched) {
+    (console as any).__vapi_patched = true;
     console.error = (...args: any[]) => {
       const msg = args.map(a => String(a)).join(' ');
       if (SUPPRESSED_ERRORS.some(s => msg.includes(s))) return;
@@ -57,7 +57,9 @@ export function useVapi(book: IBook) {
   const [limitError, setLimitError] = useState<string | null>(null);
   const [isBillingError, setIsBillingError] = useState(false);
   const [persona, setPersona] = useState("Default AI");
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(
+    getVoice(book.persona || DEFAULT_VOICE).id
+  );
   const [isTextLoading, setIsTextLoading] = useState(false);
 
   // selectedThreadId: which thread the user has clicked in the sidebar (null = current/new)
@@ -105,9 +107,8 @@ export function useVapi(book: IBook) {
   // Messages for current view
   const currentViewMessages = useMemo(() => {
     if (selectedThreadId === null) {
-      // New/current thread: show messages belonging to currentThreadId (if any)
       const tid = currentThreadIdRef.current;
-      if (!tid) return []; // Truly fresh screen
+      if (!tid) return [];
       return messages.filter(m => m.sessionId === tid);
     }
     if (selectedThreadId === 'legacy') return messages.filter(m => !m.sessionId);
@@ -166,7 +167,6 @@ export function useVapi(book: IBook) {
           if (message.role === 'assistant') setCurrentMessage('');
           if (message.role === 'user') setCurrentUserMessage('');
 
-          // Always use the current thread ID for voice messages
           const tid = getOrCreateThreadId();
 
           setMessages(prev => {
@@ -212,55 +212,103 @@ export function useVapi(book: IBook) {
         setStatus('idle');
         return;
       }
-      // Store billing session separately — does NOT affect message thread
       billingSessionRef.current = result.sessionId || null;
       lastSavedTranscriptRef.current = null;
 
       // Ensure we have a thread ID ready (may already exist from prior text chat)
       const tid = getOrCreateThreadId();
 
-      const prompts: any = {
-        "Default AI": `You are a knowledgeable AI assistant for the book "${book.title}" by ${book.author}. Help the user understand this book deeply.`,
-        "Author": `You are ${book.author}, the author of "${book.title}". Speak in first person.`,
-        "Summarizer": `You specialize in summarizing "${book.title}" by ${book.author}.`,
-        "Questioner": `You ask thought-provoking questions about "${book.title}" by ${book.author}.`,
-        "Character-1": `You are the main protagonist of "${book.title}".`
-      };
-      const sys = prompts[persona] || prompts["Default AI"];
+      const vapi = getVapi();
+      if (!vapi) { 
+        setStatus('idle'); 
+        toast.error("Voice service unavailable. Check your API key.");
+        return; 
+      }
 
-      // Include all messages for this thread as context
-      const threadCtx = messages
+      // --- Resolve voice metadata ---
+      // selectedVoiceId is the 11labs voice ID (e.g. "21m00Tcm4TlvDq8ikWAM")
+      // We need to find the matching voiceOptions entry to get language
+      const voiceMeta = Object.values(voiceOptions).find(v => v.id === selectedVoiceId)
+        || Object.values(voiceOptions).find(v => v.id === getVoice(book.persona || DEFAULT_VOICE).id)
+        || voiceOptions.rachel;
+
+      const lang = voiceMeta.language || 'en';
+      const activeVoiceId = voiceMeta.id;
+
+      // Build context from current thread messages (last 20)
+      const threadCtxStr = messages
         .filter(m => m.sessionId === tid)
         .slice(-20)
         .map(m => `${m.role}: ${m.content}`)
         .join('\n');
 
-      const vapi = getVapi();
-      if (!vapi) { setStatus('idle'); return; }
+      const hasContext = !!threadCtxStr;
+
+      // --- Build system prompt ---
+      const sysPrompts: Record<string, string> = {
+        "Default AI": `You are a knowledgeable AI assistant for the node titled "${book.title}". Help the user understand this node deeply. Keep responses concise and conversational.`,
+        "Author": `You are the author of the node "${book.title}". Speak in first person with authority and passion.`,
+        "Summarizer": `You specialize in summarizing the node "${book.title}". Be clear, concise, and structured.`,
+        "Questioner": `You ask thought-provoking questions about the node "${book.title}" to help the user think critically.`,
+      };
+
+      let sys = sysPrompts[persona] || sysPrompts["Default AI"];
+
+      // --- Build first message & language override ---
+      let firstMessage = hasContext
+        ? "I remember our conversation. Let me continue from where we left off."
+        : `Hi! I'd love to discuss "${book.title}" with you. What would you like to explore?`;
+
+      if (lang === 'hi') {
+        sys += "\n\nIMPORTANT: You MUST respond primarily in Hindi. The user has selected a Hindi voice.";
+        firstMessage = hasContext
+          ? "मुझे याद है कि हम क्या चर्चा कर रहे थे। चलिए जारी रखते हैं।"
+          : `नमस्ते! मुझे आपके साथ "${book.title}" पर चर्चा करना अच्छा लगेगा। आप क्या जानना चाहेंगे?`;
+      } else if (lang === 'te') {
+        sys += "\n\nIMPORTANT: You MUST respond primarily in Telugu. The user has selected a Telugu voice.";
+        firstMessage = hasContext
+          ? "మనం ఏమి చర్చిస్తున్నామో నాకు గుర్తుంది. కొనసాగిద్దాం."
+          : `నమస్కారం! మీతో "${book.title}" గురించి చర్చించడం నాకు చాలా ఇష్టం. మీరు ఏమి తెలుసుకోవాలనుకుంటున్నారు?`;
+      }
+
+      if (hasContext) {
+        sys += `\n\nCURRENT THREAD CONTEXT:\n${threadCtxStr}`;
+      }
+
+      // --- Determine Deepgram language code ---
+      const deepgramLang = lang === 'hi' ? 'hi' : lang === 'te' ? 'te' : 'en-US';
 
       await vapi.start(ASSISTANT_ID, {
-        firstMessage: threadCtx
-          ? "I remember what we were discussing. Let me continue."
-          : `Hi! I'd love to discuss "${book.title}" with you. What would you like to explore?`,
+        firstMessage,
+        transcriber: {
+          provider: 'deepgram',
+          model: 'nova-2',
+          language: deepgramLang,
+        },
         model: {
           provider: 'openai',
-          model: 'gpt-4o',
+          model: 'gpt-4o-mini',
           messages: [{
             role: 'system',
-            content: `${sys}\n\nCURRENT THREAD CONTEXT:\n${threadCtx || "(No prior messages in this thread)"}`
+            content: sys,
           }]
         },
         voice: {
           provider: '11labs',
-          voiceId: selectedVoiceId || getVoice(book.persona || DEFAULT_VOICE).id,
+          voiceId: activeVoiceId,
           model: 'eleven_turbo_v2_5',
+          stability: 0.45,
+          similarityBoost: 0.75,
+          style: 0,
+          useSpeakerBoost: true,
         }
       });
     } catch (e: any) {
+      console.error('[useVapi] start error:', e?.message || e);
       setStatus('idle');
       toast.error("Failed to start voice. Please try again.");
     }
-  }, [userId, book._id, book.title, book.author, book.persona, persona, messages, getOrCreateThreadId]);
+  }, [userId, book._id, book.title, book.persona, persona, messages, selectedVoiceId, getOrCreateThreadId]);
 
   // Instant stop
   const stop = useCallback(() => {
@@ -274,43 +322,36 @@ export function useVapi(book: IBook) {
 
   const sendText = useCallback(async (text: string) => {
     try {
-      // Get or create a thread ID — all messages in one session go here
       const tid = getOrCreateThreadId();
 
-      // Add user message immediately to UI
       setMessages(prev => [...prev, { role: 'user', content: text, sessionId: tid, createdAt: new Date() }]);
       saveMessage(book._id, 'user', text, tid).catch(() => {});
 
       if (status !== 'idle') {
-        // Voice mode: relay to Vapi (voice transcript handler will save the reply)
         try { getVapi()?.send({ type: 'add-message', message: { role: 'user', content: text } }); } catch (_) {}
       } else {
-        // Text-only mode: call Gemini
         setIsTextLoading(true);
         try {
           const res = await chatWithBook(book._id, text, tid);
           if (res?.success && res.response) {
             setMessages(prev => [...prev, { role: 'assistant', content: res.response!, sessionId: tid, createdAt: new Date() }]);
           } else {
-            console.error('chatWithBook failed:', res?.error);
             const errMsg = res?.error?.includes('API key') ? "AI service unavailable. Check your API key." : "Couldn't get a response. Please try again.";
             setMessages(prev => [...prev, { role: 'assistant', content: errMsg, sessionId: tid, createdAt: new Date() }]);
           }
         } catch (e: any) {
-          console.error('sendText error:', e?.message);
           setMessages(prev => [...prev, { role: 'assistant', content: "Something went wrong. Please try again.", sessionId: tid, createdAt: new Date() }]);
         } finally {
           setIsTextLoading(false);
         }
       }
     } catch (e: any) {
-      console.error('sendText outer error:', e?.message);
+      console.error('sendText error:', e?.message);
     }
   }, [status, book._id, getOrCreateThreadId]);
 
-  // Start a brand new thread (called when user clicks "+")
   const startNewThread = useCallback(() => {
-    currentThreadIdRef.current = null; // Will be lazily created on next message
+    currentThreadIdRef.current = null;
     setSelectedThreadId(null);
     setCurrentMessage('');
     setCurrentUserMessage('');
@@ -330,7 +371,6 @@ export function useVapi(book: IBook) {
       if (res?.success) {
         setMessages(prev => prev.filter(m => m.sessionId !== sessionId));
         if (selectedThreadId === sessionId) setSelectedThreadId(null);
-        // If we just deleted the current thread, reset the thread ref
         if (currentThreadIdRef.current === sessionId) {
           currentThreadIdRef.current = null;
         }
@@ -339,7 +379,6 @@ export function useVapi(book: IBook) {
         toast.error("Failed to delete thread.");
       }
     } catch (e: any) {
-      console.error('Delete error:', e?.message);
       toast.error("Failed to delete thread.");
     }
   }, [book._id, selectedThreadId]);
@@ -348,15 +387,6 @@ export function useVapi(book: IBook) {
     try {
       const res = await updateSessionTitle(sessionId, newTitle);
       if (res?.success) {
-        setMessages(prev => {
-          const index = prev.findIndex(m => m.sessionId === sessionId && m.role === 'user');
-          if (index !== -1) {
-            const updated = [...prev];
-            updated[index] = { ...updated[index], content: newTitle };
-            return updated;
-          }
-          return prev;
-        });
         toast.success("Thread renamed.");
       }
     } catch (_) {
@@ -369,7 +399,6 @@ export function useVapi(book: IBook) {
     setIsBillingError(false);
   }, []);
 
-  // Thread archive for the sidebar (all past threads from DB messages)
   const threadArchive = useMemo(() => {
     try {
       const groups: Record<string, Messages[]> = {};

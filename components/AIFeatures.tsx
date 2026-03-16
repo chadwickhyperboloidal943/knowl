@@ -14,9 +14,12 @@ import {cn} from "@/lib/utils";
 import ReactMarkdown from 'react-markdown';
 import { toast } from "sonner";
 import KnowledgeComments from "./KnowledgeComments";
+import FollowButton from "./FollowButton";
+import Link from "next/link";
+import { getFollowInfo } from "@/lib/actions/user.actions";
 
 export default function AIFeatures({ book }: { book: IBook }) {
-    const { user } = useUser();
+    const { user, isLoaded } = useUser();
     const isOwner = user?.id === book.clerkId;
     
     const [activeTab, setActiveTab] = useState<"chat" | "about" | "flashcards" | "community">("chat");
@@ -27,6 +30,17 @@ export default function AIFeatures({ book }: { book: IBook }) {
     const [visibility, setVisibility] = useState<'private' | 'public'>(book.visibility || 'private');
     const [likes, setLikes] = useState(book.likes || []);
     const isLiked = user?.id ? likes.includes(user.id) : false;
+    
+    // Social state
+    const [isFollowing, setIsFollowing] = useState(false);
+
+    useEffect(() => {
+        if (visibility === 'public' && user?.id && !isOwner) {
+            getFollowInfo(book.clerkId, user.id).then(res => {
+                if (res.success) setIsFollowing(res.isFollowing || false);
+            });
+        }
+    }, [book.clerkId, user?.id, visibility, isOwner]);
 
     // Hashtag Modal State
     const [showHashtagModal, setShowHashtagModal] = useState(false);
@@ -158,7 +172,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                             className="relative w-full max-w-md bg-white dark:bg-[#111111] rounded-[2.5rem] p-10 shadow-2xl border border-gray-100 dark:border-white/10"
                         >
                             <h3 className="text-3xl font-serif font-black text-gray-900 dark:text-white mb-2 italic">Discovery Hub</h3>
-                            <p className="text-gray-500 text-sm mb-8 font-bold uppercase tracking-widest">Add hashtags to help others find this resource</p>
+                            <p className="text-gray-500 text-sm mb-8 font-bold uppercase tracking-widest">Add hashtags to help others find this node</p>
                             
                             <div className="space-y-6">
                                 <div className="flex gap-2">
@@ -193,7 +207,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                     onClick={visibility === 'public' && hashtags.length > 0 && book.hashtags?.length ? handleUpdateTags : handleTogglePrivacy}
                                     className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 transition-all transform active:scale-95"
                                 >
-                                    {visibility === 'public' && book.hashtags?.length ? "Update Hashtags" : "Publish Knowledge Resource"}
+                                    {visibility === 'public' && book.hashtags?.length ? "Update Hashtags" : "Publish Node to Hub"}
                                 </button>
                                 
                                 <button 
@@ -211,22 +225,51 @@ export default function AIFeatures({ book }: { book: IBook }) {
             {/* Social Action Bar - Only for Public resources */}
             {visibility === 'public' && (
                 <div className="flex flex-wrap items-center justify-between gap-6 px-10 py-6 bg-white/10 dark:bg-black/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/20 dark:border-white/5 shadow-2xl">
-                    <div className="flex items-center gap-6">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Knowledge Type</span>
-                            <div className="flex items-center gap-2 mt-1">
-                                <Globe size={16} className="text-emerald-400" />
-                                <span className="font-serif font-black text-xl italic dark:text-white capitalize">{visibility}</span>
+                    <div className="flex flex-wrap items-center gap-10">
+                        {/* Author Info */}
+                        <div className="flex items-center gap-4 group">
+                            <Link href={`/users/${book.clerkId}`} className="relative">
+                                <div className="absolute -inset-1 bg-indigo-500 rounded-full blur opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                                <div className="size-12 bg-indigo-600 rounded-full flex items-center justify-center text-white font-black text-xs border-2 border-white dark:border-[#141414] shadow-lg group-hover:scale-110 transition-transform">
+                                    {book.author.charAt(0)}
+                                </div>
+                            </Link>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Curated By</span>
+                                <Link href={`/users/${book.clerkId}`} className="font-serif font-black text-xl italic dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                                    {book.author}
+                                </Link>
                             </div>
+                            {!isOwner && user?.id && (
+                                <div className="ml-2">
+                                    <FollowButton 
+                                        followerClerkId={user.id} 
+                                        followedClerkId={book.clerkId} 
+                                        initialIsFollowing={isFollowing} 
+                                    />
+                                </div>
+                            )}
                         </div>
-                        {isOwner && (
-                            <button 
-                                onClick={handleTogglePrivacy}
-                                className="px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500 hover:text-white"
-                            >
-                                Make Private
-                            </button>
-                        )}
+
+                        <div className="h-10 w-[1px] bg-black/5 dark:bg-white/10 hidden md:block" />
+
+                        <div className="flex items-center gap-6">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Node Type</span>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Globe size={16} className="text-emerald-400" />
+                                    <span className="font-serif font-black text-xl italic dark:text-white capitalize">{visibility}</span>
+                                </div>
+                            </div>
+                            {isOwner && (
+                                <button 
+                                    onClick={handleTogglePrivacy}
+                                    className="px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500 hover:text-white"
+                                >
+                                    Make Private
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -341,7 +384,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                         className="flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-white/5 dark:bg-white/5 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase tracking-widest border border-indigo-500/20 hover:bg-indigo-600 hover:text-white transition-all active:scale-95"
                                     >
                                         <Download size={14} />
-                                        Download Resource
+                                        Download Node
                                     </a>
                                 )}
                             </div>
@@ -355,6 +398,10 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                         exit={{ height: 0, opacity: 0 }}
                                         className="mb-8 overflow-hidden"
                                     >
+                                        {/* Subtitle */}
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300/80 mb-6 border-b border-black/5 dark:border-white/5 pb-4">
+                                Update the discovery tags for this knowledge node.
+                            </p>
                                         <div className="premium-card p-10 bg-white/50 dark:bg-white/[0.02] border-indigo-500/10">
                                             <div className="space-y-10">
                                                 {Object.entries(voiceCategories).map(([category, voices]) => (
@@ -426,7 +473,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                         <BookOpen size={28} />
                                     </div>
                                     <div>
-                                        <h2 className="text-5xl font-serif font-black text-[#212a3b] dark:text-white tracking-tighter leading-tight italic">Resource <span className="text-indigo-600">Brief</span></h2>
+                                        <h2 className="text-5xl font-serif font-black text-[#212a3b] dark:text-white tracking-tighter leading-tight italic">Node <span className="text-indigo-600">Insight</span></h2>
                                         <div className="h-1 w-20 bg-indigo-600 mt-2 rounded-full" />
                                     </div>
                                 </div>
@@ -612,9 +659,13 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                     <div className="size-14 bg-indigo-600/10 text-indigo-600 rounded-[1.5rem] flex items-center justify-center border border-indigo-500/20">
                                         <Users size={24} />
                                     </div>
-                                    <div className="text-left">
-                                        <h2 className="text-2xl font-serif font-black text-[#212a3b] dark:text-white tracking-tight italic">Community <span className="text-indigo-600">Pulse</span></h2>
-                                        <p className="text-gray-500 text-sm">Join the conversation about this knowledge resource</p>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h2 className="text-xl md:text-2xl font-serif font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                                Community <span className="text-indigo-600 dark:text-indigo-400 italic">Pulse</span>
+                                            </h2>
+                                        </div>
+                                        <p className="text-xs md:text-sm text-gray-600 dark:text-gray-300 font-medium">Join the conversation about this knowledge node</p>
                                     </div>
                                 </div>
                             </div>

@@ -2,9 +2,10 @@ import React from 'react';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { getUserBooks } from '@/lib/actions/book.actions';
+import { syncUser, getFollowInfo } from '@/lib/actions/user.actions';
 import BookCard from '@/components/BookCard';
 import BookStaggeredGrid from '@/components/BookStaggeredGrid';
-import { BookOpen, Calendar, Mail, Shield, Sparkles } from 'lucide-react';
+import { BookOpen, Calendar, Mail, Shield, Sparkles, Users } from 'lucide-react';
 import BookPageAnimator from '@/components/BookPageAnimator';
 
 const ProfilePage = async () => {
@@ -15,11 +16,24 @@ const ProfilePage = async () => {
         redirect('/sign-in');
     }
 
+    // Sync user with MongoDB to ensure existence for follow features
+    await syncUser({
+        clerkId: userId,
+        email: user.emailAddresses[0]?.emailAddress,
+        username: user.username || undefined,
+        imageUrl: user.imageUrl,
+        firstName: user.firstName || undefined,
+        lastName: user.lastName || undefined,
+    });
+
+    const followInfo = await getFollowInfo(userId);
     const userBooksResponse = await getUserBooks(userId);
     const books = userBooksResponse.success ? userBooksResponse.data ?? [] : [];
 
     const stats = [
-        { label: 'Total Books', value: books.length, icon: BookOpen, color: 'text-blue-500' },
+        { label: 'Total Nodes', value: books.length, icon: BookOpen, color: 'text-blue-500' },
+        { label: 'Followers', value: followInfo.success ? followInfo.followersCount : 0, icon: Users, color: 'text-emerald-500' },
+        { label: 'Following', value: followInfo.success ? followInfo.followingCount : 0, icon: Users, color: 'text-purple-500' },
         { label: 'Member Since', value: new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), icon: Calendar, color: 'text-indigo-500' },
     ];
 
@@ -101,7 +115,7 @@ const ProfilePage = async () => {
                                 </div>
                                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">The archive is empty</h3>
                                 <p className="text-gray-500 mt-2 mb-8">Ready to expand your library? Start by uploading your first manuscript.</p>
-                                <a href="/books/new" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">
+                                <a href="/nodes/new" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">
                                     Upload Now →
                                 </a>
                             </div>

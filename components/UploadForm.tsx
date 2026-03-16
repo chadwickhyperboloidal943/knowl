@@ -95,59 +95,28 @@ const UploadForm = () => {
                 return;
             }
 
-            const fileTitle = data.title || data.pdfFile.name.replace(/\.[^/.]+$/, "");
-            const file = data.pdfFile;
-            let uploadedFileBlob: UploadApiResponse;
-            let parsedFile: { content: any[], cover: string, title?: string };
+            const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
+            const pdfFile = data.pdfFile;
 
-            if (file.type === 'application/pdf') {
-                const parsedPDF = await parsePDFFile(file);
-                if(parsedPDF.content.length === 0) {
-                    toast.error("Failed to parse PDF. Please try again with a different file.");
-                    return;
-                }
-                parsedFile = {
-                    content: parsedPDF.content,
-                    cover: parsedPDF.cover,
-                    title: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ")
-                };
-                // Upload PDF for storage
-                uploadedFileBlob = await uploadViaApi(file, `${fileTitle}${file.name.substring(file.name.lastIndexOf('.'))}`, file.type);
-            } else {
-                // Upload first for extraction (this is our primary copy)
-                const uploadedBlob = await uploadViaApi(file, `${fileTitle}${file.name.substring(file.name.lastIndexOf('.'))}`, file.type, 'public');
-                uploadedFileBlob = uploadedBlob; // Reuse this for node creation
+            const parsedPDF = await parsePDFFile(pdfFile);
 
-                // Show loading toast for AI extraction
-                const extractionToast = toast.loading("Synthesizing node signatures with AI...");
-                const { extractContentFromFile, generateNodeCover } = await import("@/lib/actions/ai.actions");
-                const extracted = await extractContentFromFile(uploadedBlob.url, file.name, file.type);
-                
-                toast.dismiss(extractionToast);
-
-                if (!extracted.success || !extracted.data) {
-                    toast.error(extracted.error as string || "Failed to extract content from file");
-                    return;
-                }
-
-                parsedFile = {
-                    content: extracted.data.content,
-                    cover: await generateNodeCover(extracted.data.visualTheme || 'minimal'),
-                    title: extracted.data.title
-                };
-                console.log("[UploadForm] AI extraction successful", { title: parsedFile.title, segments: parsedFile.content.length });
+            if(parsedPDF.content.length === 0) {
+                toast.error("Failed to parse PDF. Please try again with a different file.");
+                return;
             }
 
             setPdfPreview({
-                title: parsedFile.title || file.name,
-                content: (parsedFile.content[0]?.text || "").substring(0, 300) + "...",
-                cover: parsedFile.cover
+                title: pdfFile.name,
+                content: parsedPDF.content[0]?.substring(0, 300) + "...",
+                cover: parsedPDF.cover
             });
 
             // Auto-fill title if empty
             if (!form.getValues('title')) {
                 form.setValue('title', parsedFile.title || file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " "));
             }
+
+            const uploadedPdfBlob = await uploadViaApi(pdfFile, `${fileTitle}.pdf`, 'application/pdf');
 
             let coverUrl: string;
 
@@ -171,7 +140,7 @@ const UploadForm = () => {
 
             const book = await createBook({
                 clerkId: userId,
-                title: form.getValues('title') || data.title || fileTitle,
+                title: data.title,
                 author: user?.fullName || "Anonymous Researcher",
                 persona: data.persona || "rachel", 
                 fileURL: uploadedFileBlob.url,

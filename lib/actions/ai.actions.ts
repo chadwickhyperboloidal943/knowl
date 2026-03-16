@@ -1,0 +1,105 @@
+'use server';
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { connectToDatabase } from "@/database/mongoose";
+import Book from "@/database/models/book.model";
+import BookSegment from "@/database/models/book-segment.model";
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
+
+export const generateBookInsights = async (bookId: string) => {
+    try {
+        await connectToDatabase();
+        
+        const book = await Book.findById(bookId);
+        if (!book) throw new Error("Book not found");
+
+        if (book.insights && book.knowledgeMap && book.flashcards && book.flashcards.length > 0) {
+            return { success: true, insights: book.insights, knowledgeMap: book.knowledgeMap, flashcards: book.flashcards };
+        }
+
+        // Fetch up to 20 segments to get the gist of the book
+        const segments = await BookSegment.find({ bookId }).limit(20).lean();
+        const textContent = segments.map(s => s.content).join("\n\n");
+
+        if (!textContent) {
+            return { success: false, error: "No book content available to analyze" };
+        }
+
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const prompt = `
+        Analyze the following text excerpts from the book "${book.title}" by ${book.author}.
+        Please provide three things in strict JSON format:
+        1. "insights": A captivating, multi-paragraph markdown string summarizing the book's core themes, main takeaways, and general overview.
+        2. "knowledgeMap": A Mermaid.js mindmap diagram string. 
+           STRICT RULES:
+           - Start with "mindmap" keyword.
+           - Every single node label MUST be wrapped in double quotes. 
+           - NO shapes like root(( )), node( ), or node(( )). ONLY quotes.
+           - NO code snippets, NO function-like artifacts.
+           - Use 2-space indentation for hierarchy.
+        3. "flashcards": An array of 10 interactive flashcards. Each object MUST have:
+           - "question": The challenge.
+           - "answer": The explanation.
+           - "hint": A subtle clue to help the user without giving it away.
+        
+        Example JSON:
+        {
+           "insights": "# Overview...",
+           "knowledgeMap": "mindmap\\n  \\"Root\\"\\n    \\"Branch 1\\"\\n      \\"Leaf 1\\"",
+           "flashcards": [
+               { "question": "?", "answer": "!", "hint": "..." }
+           ]
+        }
+        
+        Excerpts:
+        ${textContent.slice(0, 30000)}
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = result.response.text();
+        
+        // Extraction with fallback and JSON cleaning
+        let parsed: any;
+        try {
+            const jsonMatch = response.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) throw new Error("No JSON found in AI response");
+            
+            // Clean common AI formatting issues
+            let jsonStr = jsonMatch[0].trim();
+            parsed = JSON.parse(jsonStr);
+        } catch (parseError) {
+            console.error("Failed to parse Gemini response:", response);
+            return { 
+                success: false, 
+                error: "We've experienced a slight hiccup analyzing the book. We will work on this. Please try again." 
+            };
+        }
+
+        // Validate required fields
+        if (!parsed.insights || !parsed.knowledgeMap || !Array.isArray(parsed.flashcards)) {
+            return { success: false, error: "AI provided incomplete data. We will work on this." };
+        }
+
+        await Book.findByIdAndUpdate(bookId, {
+            insights: parsed.insights,
+            knowledgeMap: parsed.knowledgeMap,
+            flashcards: parsed.flashcards
+        });
+
+        return { 
+            success: true, 
+            insights: parsed.insights, 
+            knowledgeMap: parsed.knowledgeMap,
+            flashcards: parsed.flashcards 
+        };
+
+    } catch (error: any) {
+        console.error("Error generating insights:", error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "We've experienced a slight hiccup. We will work on this." 
+        };
+    }
+}

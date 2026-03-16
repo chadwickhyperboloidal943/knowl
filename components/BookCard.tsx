@@ -51,7 +51,7 @@ const BookCard = ({ _id, title, author, coverURL, slug, likes = [], commentsCoun
             whileHover={{ y: -8 }}
             className="group relative"
         >
-            <Link href={`/books/${slug}`}>
+            <Link href={`/nodes/${slug}`}>
                 <motion.div
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}

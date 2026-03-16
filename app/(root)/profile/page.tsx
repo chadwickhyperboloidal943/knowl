@@ -101,7 +101,7 @@ const ProfilePage = async () => {
                                 </div>
                                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">The archive is empty</h3>
                                 <p className="text-gray-500 mt-2 mb-8">Ready to expand your library? Start by uploading your first manuscript.</p>
-                                <a href="/books/new" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">
+                                <a href="/nodes/new" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">
                                     Upload Now →
                                 </a>
                             </div>

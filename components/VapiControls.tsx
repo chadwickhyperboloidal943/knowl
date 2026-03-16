@@ -1,6 +1,6 @@
 'use client';
 
-import { Mic, MicOff, Send, Plus, History, ChevronRight, UserCircle, ChevronDown } from "lucide-react";
+import { Mic, MicOff, Send, Plus, History, ChevronRight, UserCircle } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import { IBook } from "@/types";
 import Image from "next/image";
@@ -10,6 +10,7 @@ import HistorySidebar from "@/components/HistorySidebar";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { voiceOptions } from "@/lib/constants";
 
 const VapiControls = ({ book, voiceId }: { book: IBook, voiceId: string }) => {
     const {
@@ -19,12 +20,23 @@ const VapiControls = ({ book, voiceId }: { book: IBook, voiceId: string }) => {
         clearError, limitError, isBillingError,
         sendText, startNewThread, persona, setPersona,
         threadArchive, selectedThreadId, setSelectedThreadId,
-        hasArchive,
+        hasArchive, setSelectedVoiceId,
     } = useVapi(book);
 
     const router = useRouter();
     const [textInput, setTextInput] = useState("");
     const [showHistory, setShowHistory] = useState(false);
+
+    // KEY FIX: Sync the voiceId prop from AIFeatures into the hook's state
+    // Without this, the hook's start() always uses the default voice regardless of user selection
+    useEffect(() => {
+        if (voiceId) {
+            setSelectedVoiceId(voiceId);
+        }
+    }, [voiceId, setSelectedVoiceId]);
+
+    // Resolve voice name for display
+    const activeVoiceName = Object.values(voiceOptions).find(v => v.id === voiceId)?.name || 'Neural';
 
     const handleSendText = (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,7 +95,7 @@ const VapiControls = ({ book, voiceId }: { book: IBook, voiceId: string }) => {
                                 <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800/30 flex items-center gap-3">
                                     <UserCircle size={14} className="text-indigo-500" />
                                     <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400">
-                                        Assisting in {(Object.values(require('@/lib/constants').voiceOptions) as any[]).find((v: any) => v.id === voiceId)?.name || 'Neural'} Voice
+                                        Assisting in {activeVoiceName} Voice
                                     </span>
                                 </div>
 

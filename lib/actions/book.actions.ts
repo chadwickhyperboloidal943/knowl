@@ -309,7 +309,7 @@ export const updateBookTags = async (bookId: string, hashtags: string[]) => {
         await book.save();
 
         const { revalidatePath } = await import("next/cache");
-        revalidatePath(`/books/${book.slug}`);
+        revalidatePath(`/nodes/${book.slug}`);
         revalidatePath('/');
 
         return { success: true, hashtags: book.hashtags };

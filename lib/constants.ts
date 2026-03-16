@@ -88,7 +88,16 @@ export const sampleBooks = [
 
 // File validation helpers
 export const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
-export const ACCEPTED_PDF_TYPES = ['application/pdf'];
+export const ACCEPTED_FILE_TYPES = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/markdown',
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+];
 export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 

@@ -103,3 +103,58 @@ export const generateBookInsights = async (bookId: string) => {
         };
     }
 }
+
+export const extractContentFromFile = async (fileUrl: string, fileName: string, fileType: string) => {
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+        // Fetch the file content
+        const response = await fetch(fileUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const base64Content = Buffer.from(arrayBuffer).toString('base64');
+
+        const prompt = `
+        You are an expert document analyzer. Extract the text content from this file: "${fileName}".
+        If it's an image, perform OCR. If it's a document (DOCX/PPTX), extract all readable text.
+        Format the output as a JSON object with:
+        1. "content": The extracted text content.
+        2. "suggestedTitle": A clean title for this document.
+        3. "summary": A brief (100-200 chars) summary/gist of the content for a preview.
+        
+        Strict JSON format only.
+        `;
+
+        const result = await model.generateContent([
+            prompt,
+            {
+                inlineData: {
+                    data: base64Content,
+                    mimeType: fileType
+                }
+            }
+        ]);
+
+        const aiResponse = result.response.text();
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found in AI response");
+        
+        const parsed = JSON.parse(jsonMatch[0].trim());
+
+        // Split into segments
+        const { splitIntoSegments } = await import("@/lib/utils");
+        const segments = splitIntoSegments(parsed.content);
+
+        return {
+            success: true,
+            data: {
+                content: segments,
+                title: parsed.suggestedTitle || fileName.replace(/\.[^/.]+$/, ""),
+                summary: parsed.summary
+            }
+        };
+
+    } catch (error) {
+        console.error("Error extracting content from file:", error);
+        return { success: false, error: "Failed to process file with AI" };
+    }
+}

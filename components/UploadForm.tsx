@@ -10,7 +10,7 @@ import { BookUploadFormValues } from '@/types';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ACCEPTED_PDF_TYPES, ACCEPTED_IMAGE_TYPES } from '@/lib/constants';
+import { ACCEPTED_FILE_TYPES, ACCEPTED_IMAGE_TYPES } from '@/lib/constants';
 import FileUploader from './FileUploader';
 import LoadingOverlay from './LoadingOverlay';
 import {useAuth, useUser} from "@clerk/nextjs";
@@ -88,32 +88,60 @@ const UploadForm = () => {
             if(existsCheck.exists && existsCheck.book) {
                 toast.info("Book with same title already exists.");
                 form.reset()
-                router.push(`/books/${existsCheck.book.slug}`)
+                router.push(`/nodes/${existsCheck.book.slug}`)
                 return;
             }
 
-            const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
-            const pdfFile = data.pdfFile;
+            const fileTitle = data.title || data.pdfFile.name.replace(/\.[^/.]+$/, "");
+            const file = data.pdfFile;
+            let parsedFile: { content: any[], cover: string, title?: string };
 
-            const parsedPDF = await parsePDFFile(pdfFile);
+            if (file.type === 'application/pdf') {
+                const parsedPDF = await parsePDFFile(file);
+                if(parsedPDF.content.length === 0) {
+                    toast.error("Failed to parse PDF. Please try again with a different file.");
+                    return;
+                }
+                parsedFile = {
+                    content: parsedPDF.content,
+                    cover: parsedPDF.cover,
+                    title: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ")
+                };
+            } else {
+                // Upload first, then extract content
+                const uploadedBlob = await uploadViaApi(file, `${fileTitle}${file.name.substring(file.name.lastIndexOf('.'))}`, file.type);
+                
+                // Show loading toast for AI extraction
+                const extractionToast = toast.loading("Synthesizing node signatures with AI...");
+                const { extractContentFromFile } = await import("@/lib/actions/ai.actions");
+                const extracted = await extractContentFromFile(uploadedBlob.url, file.name, file.type);
+                
+                toast.dismiss(extractionToast);
 
-            if(parsedPDF.content.length === 0) {
-                toast.error("Failed to parse PDF. Please try again with a different file.");
-                return;
+                if (!extracted.success || !extracted.data) {
+                    toast.error(extracted.error as string || "Failed to extract content from file");
+                    return;
+                }
+
+                parsedFile = {
+                    content: extracted.data.content,
+                    cover: '/file-icon.png', // Fallback for now
+                    title: extracted.data.title
+                };
             }
 
             setPdfPreview({
-                title: pdfFile.name,
-                content: parsedPDF.content[0]?.text.substring(0, 300) + "...",
-                cover: parsedPDF.cover
+                title: parsedFile.title || file.name,
+                content: parsedFile.content[0]?.text.substring(0, 300) + "...",
+                cover: parsedFile.cover
             });
 
             // Auto-fill title if empty
             if (!form.getValues('title')) {
-                form.setValue('title', pdfFile.name.replace(/\.[^/.]+$/, "").replace(/_/g, " "));
+                form.setValue('title', parsedFile.title || file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " "));
             }
 
-            const uploadedPdfBlob = await uploadViaApi(pdfFile, `${fileTitle}.pdf`, 'application/pdf');
+            const uploadedPdfBlob = await uploadViaApi(file, `${fileTitle}${file.name.substring(file.name.lastIndexOf('.'))}`, file.type);
 
             let coverUrl: string;
 
@@ -121,23 +149,26 @@ const UploadForm = () => {
                 const coverFile = data.coverImage;
                 const uploadedCoverBlob = await uploadViaApi(coverFile, `${fileTitle}_cover.png`, coverFile.type, 'public');
                 coverUrl = uploadedCoverBlob.url;
-            } else {
-                const response = await fetch(parsedPDF.cover)
+            } else if (parsedFile.cover && parsedFile.cover.startsWith('data:')) {
+                const response = await fetch(parsedFile.cover)
                 const blob = await response.blob();
 
                 const uploadedCoverBlob = await uploadViaApi(blob, `${fileTitle}_cover.png`, 'image/png', 'public');
                 coverUrl = uploadedCoverBlob.url;
+            } else {
+                 // Default cover for non-PDFs or when extraction fails
+                 coverUrl = 'https://utfs.io/f/5e0e64c1-4b1e-4b0b-8d6d-2e1f488f5f3e-1z.png'; // A nice default gradient/placeholder
             }
 
             const book = await createBook({
                 clerkId: userId,
-                title: data.title,
+                title: form.getValues('title') || data.title,
                 author: user?.fullName || "Anonymous Researcher",
                 persona: "rachel", // Default to Rachel initially, user can change later in Hub
                 fileURL: uploadedPdfBlob.url,
                 fileBlobKey: uploadedPdfBlob.pathname,
                 coverURL: coverUrl,
-                fileSize: pdfFile.size,
+                fileSize: file.size,
             });
 
             if(!book.success) {
@@ -151,11 +182,11 @@ const UploadForm = () => {
             if(book.alreadyExists) {
                 toast.info("Book with same title already exists.");
                 form.reset()
-                router.push(`/books/${book.data.slug}`)
+                router.push(`/nodes/${book.data.slug}`)
                 return;
             }
 
-            const segments = await saveBookSegments(book.data._id, userId, parsedPDF.content);
+            const segments = await saveBookSegments(book.data._id, userId, parsedFile.content);
 
             if(!segments.success) {
                 toast.error("Failed to save book segments");
@@ -189,11 +220,11 @@ const UploadForm = () => {
                                 <FileUploader
                                     control={form.control}
                                     name="pdfFile"
-                                    label="Library Asset (PDF)"
-                                    acceptTypes={ACCEPTED_PDF_TYPES}
+                                    label="Library Asset"
+                                    acceptTypes={ACCEPTED_FILE_TYPES}
                                     icon={Upload}
-                                    placeholder="Drop your PDF here"
-                                    hint="Maximum size: 50MB"
+                                    placeholder="Drop your file here"
+                                    hint="PDF, DOCX, PPTX, Images, Text (Max 500MB)"
                                     disabled={isSubmitting}
                                 />
                             </div>
@@ -282,7 +313,7 @@ const UploadForm = () => {
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-3">
-                                                {["OCR Analyzed", "Semantic Map", "Structure Linked"].map(tag => (
+                                                {["AI Analyzed", "Semantic Map", "Structure Linked"].map(tag => (
                                                     <div key={tag} className="px-3 py-1 bg-white dark:bg-white/5 rounded-full border border-black/5 dark:border-white/5 text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                                         <div className="size-1 bg-green-500 rounded-full" />
                                                         {tag}

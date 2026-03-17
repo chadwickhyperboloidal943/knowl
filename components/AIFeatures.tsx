@@ -126,7 +126,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
         }
     }, [isChallengeMode, timeLeft, challengeEnded]);
 
-    const [selectedVoiceId, setSelectedVoiceId] = useState(book.persona || DEFAULT_VOICE);
+    const [selectedVoiceId, setSelectedVoiceId] = useState(book.persona ? (voiceOptions[book.persona as keyof typeof voiceOptions]?.id || book.persona) : voiceOptions[DEFAULT_VOICE].id);
     const [showVoiceMenu, setShowVoiceMenu] = useState(false);
 
     const handleAnswer = (correct: boolean) => {
@@ -366,6 +366,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 px-4">
                                 <div className="flex items-center gap-3">
                                     <button 
+                                        suppressHydrationWarning
                                         onClick={() => setShowVoiceMenu(!showVoiceMenu)}
                                         className={cn(
                                             "flex items-center gap-2.5 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-lg",
@@ -414,6 +415,7 @@ export default function AIFeatures({ book }: { book: IBook }) {
                                                                 return (
                                                                     <button
                                                                         key={voice.id}
+                                                                        suppressHydrationWarning
                                                                         onClick={() => {
                                                                             setSelectedVoiceId(voice.id);
                                                                             toast.success(`Connected to ${voice.name}'s resonance`);

@@ -34,8 +34,8 @@ const Navbar = () => {
     }
 
     return (
-        <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl">
-            <div className="premium-glass dark:premium-glass-dark rounded-2xl px-6 py-3 flex justify-between items-center shadow-lg">
+        <header className="fixed top-0 left-1/2 -translate-x-1/2 z-50 w-full pt-4 px-4 bg-transparent pointer-events-none">
+            <div className="premium-glass dark:premium-glass-dark rounded-2xl px-6 py-3 flex justify-between items-center shadow-lg pointer-events-auto max-w-7xl mx-auto">
                 <Link href="/" className="flex gap-2 items-center group">
                     <div className="size-9 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20 group-hover:scale-110 transition-transform">
                         <span className="text-white font-black text-xl italic drop-shadow-sm">K</span>
@@ -88,7 +88,7 @@ const Navbar = () => {
                             </div>
                             <div className="flex flex-col text-left">
                                 <span className="font-bold text-gray-900 dark:text-white text-base">Add New Node</span>
-                                <span className="text-xs text-gray-500 dark:text-gray-200 italic">Synthesize your PDF</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-200 italic">Synthesize your node</span>
                             </div>
                         </Link>
                     </SignedIn>

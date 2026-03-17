@@ -5,7 +5,7 @@ import { Layers } from "lucide-react";
 const Page = () => {
     return (
         <BookPageAnimator>
-            <main className="new-book relative min-h-screen py-24">
+            <main className="new-book relative min-h-screen pt-40 pb-24 px-4">
                 <section className="flex flex-col items-center gap-6 text-center mb-16 relative z-10">
                     <div className="size-20 bg-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 mb-4 transform -rotate-6">
                         <Layers size={40} className="text-white" />

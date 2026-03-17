@@ -173,12 +173,15 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
             </div>
 
             {/* Comment Input */}
-            <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
+            <form onSubmit={handleSubmit} className="flex gap-4 mb-10 group/input">
                 {user?.imageUrl ? (
-                    <img src={user.imageUrl} alt="" className="size-10 rounded-full shrink-0 object-cover" />
+                    <div className="relative shrink-0">
+                        <img src={user.imageUrl} alt="" className="size-11 rounded-full object-cover border-2 border-indigo-500/20 shadow-md transition-transform group-focus-within/input:scale-105" />
+                        <div className="absolute inset-0 rounded-full border border-black/5 dark:border-white/10" />
+                    </div>
                 ) : (
-                    <div className="size-10 rounded-full bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
-                        <User size={18} className="text-indigo-500" />
+                    <div className="size-11 rounded-full bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center shrink-0 border-2 border-indigo-500/20 shadow-sm">
+                        <User size={20} className="text-indigo-500" />
                     </div>
                 )}
                 <div className="relative flex-1">
@@ -242,14 +245,17 @@ export default function KnowledgeComments({ bookId, bookOwnerId }: { bookId: str
                                 )}
 
                                 {comment.userImage ? (
-                                    <img
-                                        src={comment.userImage}
-                                        alt={comment.userName}
-                                        className="size-10 rounded-full object-cover shrink-0 border border-black/5 dark:border-white/5"
-                                    />
+                                    <div className="relative shrink-0">
+                                        <img
+                                            src={comment.userImage}
+                                            alt={comment.userName}
+                                            className="size-11 rounded-full object-cover border border-black/5 dark:border-white/10 shadow-sm transition-transform group-hover:scale-105"
+                                        />
+                                        <div className="absolute inset-0 rounded-full border border-black/5 dark:border-white/20" />
+                                    </div>
                                 ) : (
-                                    <div className="size-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
-                                        <User size={16} className="text-indigo-400" />
+                                    <div className="size-11 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0 border border-black/5 dark:border-white/10">
+                                        <User size={18} className="text-indigo-400" />
                                     </div>
                                 )}
 

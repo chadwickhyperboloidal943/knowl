@@ -5,7 +5,7 @@ import Vapi from '@vapi-ai/web';
 import { useAuth } from '@clerk/nextjs';
 
 import { useSubscription } from '@/hooks/useSubscription';
-import { ASSISTANT_ID, DEFAULT_VOICE, voiceOptions, VOICE_SETTINGS, VAPI_DASHBOARD_CONFIG } from '@/lib/constants';
+import { ASSISTANT_ID, DEFAULT_VOICE, voiceOptions, VOICE_SETTINGS } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
 import { IBook, Messages } from '@/types';
 import { startVoiceSession, endVoiceSession } from '@/lib/actions/session.actions';
@@ -18,17 +18,6 @@ const TIMER_INTERVAL_MS = 1000;
 
 // Suppress known Daily.co / Vapi lifecycle noise
 const SUPPRESSED_ERRORS = ['Meeting has ended', 'ejection', 'Meeting ended', 'daily-js'];
-if (typeof window !== 'undefined') {
-  const _origError = console.error.bind(console);
-  if (!(console as any).__vapi_patched) {
-    (console as any).__vapi_patched = true;
-    console.error = (...args: any[]) => {
-      const msg = args.map(a => String(a)).join(' ');
-      if (SUPPRESSED_ERRORS.some(s => msg.includes(s))) return;
-      _origError(...args);
-    };
-  }
-}
 
 let vapiInstance: any = null;
 function getVapi() {
@@ -187,7 +176,11 @@ export function useVapi(book: IBook) {
           setStatus('idle'); return;
         }
         setStatus('idle');
-        if (!isStoppingRef.current) toast.error("Voice connection lost. Please try again.");
+        if (!isStoppingRef.current) {
+          console.error('[Vapi] WebSocket Error:', err);
+          console.error('[Vapi] Detailed error string:', errStr);
+          toast.error("Voice connection lost. Please try again.");
+        }
       }
     };
 
@@ -265,6 +258,15 @@ export function useVapi(book: IBook) {
       const deepgramLang = 'en-US';
       const voiceModel = 'eleven_turbo_v2_5';
 
+      if (!ASSISTANT_ID) {
+        console.error('[Vapi] Missing NEXT_PUBLIC_ASSISTANT_ID');
+        toast.error("Vapi Assistant ID is missing. Check your .env setup.");
+        setStatus('idle');
+        return;
+      }
+
+      console.log('[Vapi] Starting session with:', { voiceId: activeVoiceId, assistantId: ASSISTANT_ID });
+
       await vapi.start(ASSISTANT_ID, {
         firstMessage,
         transcriber: {
@@ -286,12 +288,12 @@ export function useVapi(book: IBook) {
           model: voiceModel,
           ...VOICE_SETTINGS,
         },
-        ...VAPI_DASHBOARD_CONFIG,
       });
+      console.log('[Vapi] start() requested');
     } catch (e: any) {
       console.error('[useVapi] start error:', e?.message || e);
       setStatus('idle');
-      toast.error("Failed to start voice. Please try again.");
+      toast.error(`Voice failed: ${e?.message || 'Check your Vapi/11Labs configuration'}`);
     }
   }, [userId, book._id, book.title, book.persona, persona, messages, selectedVoiceId, getOrCreateThreadId]);
 

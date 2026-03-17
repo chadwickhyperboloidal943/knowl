@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { getBookBySlug } from "@/lib/actions/book.actions";
-import AIFeatures from "@/components/AIFeatures";
+import AIFeaturesClientOnly from "@/components/AIFeaturesClientOnly";
 import BookPageAnimator from "@/components/BookPageAnimator";
 
 
@@ -36,7 +36,7 @@ export default async function BookDetailsPage({
       </Link>
 
       <BookPageAnimator>
-        <AIFeatures book={book} />
+        <AIFeaturesClientOnly book={book} />
       </BookPageAnimator>
     </div>
   );

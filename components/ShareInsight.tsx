@@ -1,13 +1,18 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Share2, Twitter, Linkedin, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { IBook } from "@/types";
 
 export default function ShareInsight({ book }: { book: IBook }) {
-    const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const [shareUrl, setShareUrl] = useState('');
     const shareText = `I'm synthesizing "${book.title}" on Knowl! Interacting with these AI knowledge nodes is incredible. Check it out!`;
+
+    useEffect(() => {
+        setShareUrl(window.location.href);
+    }, []);
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(`${shareText} ${shareUrl}`);

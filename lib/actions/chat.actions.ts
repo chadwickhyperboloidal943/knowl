@@ -30,9 +30,9 @@ export const chatWithBook = async (bookId: string, userMessage: string, sessionI
             .map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
             .join('\n');
 
-        // Fetch book segments for context
-        const segments = await BookSegment.find({ bookId }).limit(10).lean();
-        const bookContext = segments.map((s: any) => s.content).join('\n\n').slice(0, 12000);
+        // Fetch book segments for context - increased depth for better understanding
+        const segments = await BookSegment.find({ bookId }).limit(40).lean();
+        const bookContext = segments.map((s: any) => s.text).join('\n\n').slice(0, 500000); // Massive context support for Gemini 2.0 Flash
 
         // Use the same model that works in ai.actions.ts
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -74,10 +74,24 @@ Your response:`;
 
         return { success: true, response: aiResponse };
     } catch (error: any) {
-        console.error("chatWithBook error:", error);
+        console.error("chatWithBook error details:", {
+            message: error.message,
+            stack: error.stack,
+            bookId,
+            sessionId
+        });
+        
+        let userErrorMessage = "We've experienced a slight hiccup in our conversation. Please try again.";
+        
+        if (error.message?.includes('API key')) {
+            userErrorMessage = "AI service configuration error. Please contact support.";
+        } else if (error.message?.includes('quota') || error.message?.includes('429')) {
+            userErrorMessage = "AI service is currently busy. Please wait a moment and try again.";
+        }
+
         return { 
             success: false, 
-            error: "We've experienced a slight hiccup in our conversation. We will work on this. Please try again." 
+            error: userErrorMessage
         };
     }
 };

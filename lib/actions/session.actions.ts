@@ -52,10 +52,15 @@ export const startVoiceSession = async (providedClerkId: string, bookId: string)
             maxDurationMinutes: limits.maxDurationPerSession,
         }
     } catch (e: any) {
-        console.error('Error starting voice session', e);
+        console.error('Error starting voice session details:', {
+            message: e.message,
+            stack: e.stack,
+            providedClerkId,
+            bookId
+        });
         return { 
             success: false, 
-            error: "We've experienced a slight hiccup starting your voice session. We will work on this. Please try again later." 
+            error: `Voice session initialization failed: ${e.message || "Please try again later."}` 
         }
     }
 }
@@ -73,10 +78,24 @@ export const endVoiceSession = async (sessionId: string, durationSeconds: number
 
         return { success: true }
     } catch (e: any) {
-        console.error('Error ending voice session', e);
-        return { 
-            success: false, 
-            error: "We've experienced a slight hiccup concluding your session. We will work on this." 
+        console.error('Error ending voice session details:', {
+            message: e.message,
+            stack: e.stack,
+            sessionId
+        });
+        
+        let errorMessage = "Failed to conclude session properly.";
+        if (e.message?.includes('network') || e.message?.includes('timeout')) {
+            errorMessage = "Network error while saving session data.";
+        } else if (e.name === 'ValidationError') {
+            errorMessage = "Invalid session data provided.";
+        } else if (e.message) {
+            errorMessage = `Session error: ${e.message}`;
+        }
+        
+        return {
+            success: false,
+            error: errorMessage
         }
     }
 }

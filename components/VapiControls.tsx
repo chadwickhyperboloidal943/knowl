@@ -64,8 +64,8 @@ const VapiControls = ({ book, voiceId }: { book: IBook, voiceId: string }) => {
     }, [limitError, isBillingError, router, clearError]);
 
     return (
-        <div className="max-w-[1600px] mx-auto px-4 md:px-8" suppressHydrationWarning>
-            <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="max-w-[1600px] mx-auto px-2 md:px-8" suppressHydrationWarning>
+            <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
 
                 {/* ===== LEFT: Book Info Card ===== */}
                 <div className="w-full lg:w-[300px] lg:sticky lg:top-24 shrink-0">
@@ -129,7 +129,7 @@ const VapiControls = ({ book, voiceId }: { book: IBook, voiceId: string }) => {
 
                 {/* ===== RIGHT: Chat Panel ===== */}
                 <div className="flex-1 w-full min-w-0 relative">
-                    <div className="bg-white dark:bg-[#0c0c0c] rounded-3xl border border-black/5 dark:border-white/10 shadow-xl flex flex-col h-[calc(100vh-120px)] min-h-[550px] overflow-hidden">
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-3xl border border-black/5 dark:border-white/10 shadow-xl flex flex-col h-[calc(100vh-140px)] lg:h-[calc(100vh-120px)] min-h-[500px] overflow-hidden">
 
                         {/* Chat Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-black/5 dark:border-white/10 shrink-0 bg-white dark:bg-[#0c0c0c]" suppressHydrationWarning>
@@ -184,9 +184,9 @@ const VapiControls = ({ book, voiceId }: { book: IBook, voiceId: string }) => {
                                         type="text"
                                         value={textInput}
                                         onChange={(e) => setTextInput(e.target.value)}
-                                        placeholder="Ask anything about the node..."
+                                        placeholder="Ask anything..."
                                         disabled={isTextLoading}
-                                        className="flex-1 px-4 py-3 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-gray-900 dark:text-white placeholder:text-gray-200 placeholder:text-xs transition-all disabled:opacity-60"
+                                        className="flex-1 px-3 md:px-4 py-2.5 md:py-3 bg-gray-50 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 placeholder:text-[10px] transition-all disabled:opacity-60"
                                         suppressHydrationWarning
                                     />
                                     <button

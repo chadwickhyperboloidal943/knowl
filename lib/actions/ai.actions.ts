@@ -7,6 +7,48 @@ import BookSegment from "@/database/models/book-segment.model";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
+const isGeminiQuotaError = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error ?? "");
+    return msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("too many requests");
+};
+
+const buildFallbackInsights = (title: string, author: string, segments: string[]) => {
+    const sample = segments.filter(Boolean).slice(0, 8);
+    const bullets = sample.slice(0, 5).map((s) => {
+        const trimmed = s.replace(/\s+/g, " ").trim();
+        return `- ${trimmed.slice(0, 160)}${trimmed.length > 160 ? "..." : ""}`;
+    });
+
+    const insights = [
+        `# ${title}`,
+        `A quick local summary for ${author}.`,
+        "",
+        "The AI quota is currently exhausted, so this snapshot is generated from your extracted node content.",
+        "",
+        "## Key Excerpts",
+        ...(bullets.length ? bullets : ["- Content extracted successfully, but no concise excerpt preview is currently available."]),
+    ].join("\n");
+
+    const knowledgeMap = [
+        "mindmap",
+        `  \"${title}\"`,
+        "    \"Core Ideas\"",
+        "    \"Examples\"",
+        "    \"Applications\"",
+        "    \"Open Questions\"",
+    ].join("\n");
+
+    const flashcards = [
+        { question: `What is the primary focus of ${title}?`, answer: "Identify the central argument or purpose described in the excerpts.", hint: "Look for recurring concepts and themes." },
+        { question: "Which idea appears most frequently?", answer: "The most repeated concept is usually a core theme.", hint: "Scan repeated terms in the excerpt list." },
+        { question: "What practical use is suggested?", answer: "Map at least one concept to a real scenario or workflow.", hint: "Find examples with action verbs." },
+        { question: "What assumption does the text rely on?", answer: "Most arguments rest on an unstated premise you can test.", hint: "Ask: what must be true for this to hold?" },
+        { question: "What should be verified next?", answer: "Validate claims with a second source or experiment.", hint: "Turn one claim into a testable question." },
+    ];
+
+    return { insights, knowledgeMap, flashcards };
+};
+
 export const generateBookInsights = async (bookId: string) => {
     try {
         await connectToDatabase();
@@ -57,8 +99,37 @@ export const generateBookInsights = async (bookId: string) => {
         ${textContent.slice(0, 30000)}
         `;
 
-        const result = await model.generateContent(prompt);
-        const response = result.response.text();
+        let response = "";
+        try {
+            const result = await model.generateContent(prompt);
+            response = result.response.text();
+        } catch (modelError) {
+            if (isGeminiQuotaError(modelError)) {
+                console.error("[ai.actions] Gemini quota exceeded while generating insights:", modelError);
+
+                const fallback = buildFallbackInsights(
+                    book.title,
+                    book.author,
+                    segments.map((s: any) => String(s.content || ""))
+                );
+
+                await Book.updateOne({ _id: bookId }, {
+                    insights: fallback.insights,
+                    knowledgeMap: fallback.knowledgeMap,
+                    flashcards: fallback.flashcards,
+                });
+
+                return {
+                    success: true,
+                    insights: fallback.insights,
+                    knowledgeMap: fallback.knowledgeMap,
+                    flashcards: fallback.flashcards,
+                    warning: "Gemini quota exceeded. A local fallback summary was generated.",
+                };
+            }
+
+            throw modelError;
+        }
         
         // Extraction with fallback and JSON cleaning
         let parsed: any;
@@ -102,6 +173,14 @@ export const generateBookInsights = async (bookId: string) => {
 
     } catch (error: any) {
         console.error("Error generating insights:", error);
+
+        if (isGeminiQuotaError(error)) {
+            return {
+                success: false,
+                error: "Gemini API quota exceeded (429). Enable billing or wait for quota reset, then retry.",
+            };
+        }
+
         return { 
             success: false, 
             error: error instanceof Error ? error.message : "We've experienced a slight hiccup. We will work on this." 

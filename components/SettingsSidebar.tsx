@@ -23,7 +23,7 @@ const SettingsSidebar = ({ show, onClose }: SettingsSidebarProps) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] pointer-events-auto"
           />
 
           {/* Sidebar - fully opaque */}
@@ -31,7 +31,7 @@ const SettingsSidebar = ({ show, onClose }: SettingsSidebarProps) => {
             initial={{ x: '100%' }}
             animate={{ x: 0, transition: { type: "spring", damping: 28, stiffness: 220 } }}
             exit={{ x: '100%' }}
-            className="fixed top-0 right-0 h-full w-[320px] z-[101] flex flex-col"
+            className="fixed top-0 right-0 h-full w-[320px] z-[101] flex flex-col pointer-events-auto"
             style={{ background: 'var(--settings-bg, #ffffff)' }}
           >
             {/* Inner wrapper handles dark/light properly */}

